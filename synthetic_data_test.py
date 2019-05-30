@@ -870,12 +870,12 @@ def test_segment_causality():
     cau_seg = [s1,s2,s3]
     no_cau_seg = [s4, s5, s6]
     total_recall_points = 0
-    res2 = intervalIntersection(cau_seg,As)
+    res2 = intervalIntersection(cau_seg,res)
     for i in res2:
         total_recall_points= total_recall_points+i.end-i.start
     print total_recall_points/3000.0
     total_wrong_points = 0
-    res3 = intervalIntersection(no_cau_seg,As)
+    res3 = intervalIntersection(no_cau_seg,res)
     for i in res3:
         print str(i.start) + " " + str(i.end)
     for i in res3:
