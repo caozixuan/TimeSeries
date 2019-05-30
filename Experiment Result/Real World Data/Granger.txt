@@ -1,0 +1,57 @@
+parameter£ºresults = model.fit(maxlags=15,trend='nc',ic='aic')£¬Considering that the final mechanical data lags larger, the data maxlag is 100.
+
+river£ºrhein
+
+sp -> ma:0.0140108848834
+ma -> sp:3.42164209791e-06
+
+sp -> wo:0.17317513085
+wo -> sp:0.0405623291018
+
+sp -> mz:0.0158378385871
+mz -> sp:0.252783682981
+
+ma -> wo:4.1100195732e-85
+wo -> ma:9.27934727853e-09
+
+ma -> mz:1.40823982166e-08
+mz -> ma:0.497077215408
+
+wo -> mz:1.2170597049e-05
+mz -> wo:0.0139173280925
+
+river£ºsaar
+fr->hw = 0.48251153531  hw->fr = 2.00375833648e-06
+sa->hw = 0.80705830795  hw->sa = 1.29559351239e-08
+fr->sa = 0.0214474286915  sa->fr = 6.58189769327e-12
+
+temperature and ozone: cause is temperature, effect is ozone
+
+Pair49:
+cause -> effect:9.13505930125e-06
+effect -> cause:0.00606250366875
+
+Pair50:
+cause -> effect:1.6027896123e-06
+effect -> cause:0.282860047251
+Pair51:
+cause -> effect:0.0429064149866
+effect -> cause:0.423807852514
+
+Outdoor Temperature and Indoor Temperature: Outdoor Temperature is cause, Indoor Temperature is effect
+cause -> effect:7.605016086e-22
+effect -> cause:0.000769308590851
+
+Mechatronic Engineering Data: without noise
+input-> output1:9.54413417233e-33
+output1 -> input:0.0725415331645
+input -> output2:3.95225221843e-117
+output2 -> input:2.22036294781e-09
+
+
+Mechatronic Engineering Data: with noise
+input-> output1:6.76004942315e-18
+output1-> input:0.0564767703306
+
+input-> output2:2.40903353897e-36
+output2 -> input:3.56368361314e-09

@@ -1,0 +1,52 @@
+river£ºrhein
+
+sp->mh = 171.810350733  mh->sp = 131.78305433
+sp->wo = 165.24175216  wo->sp = 141.097332758
+sp->mz = 199.299487623  mh->sp = 147.762509327
+mh->wo = 137.955932969  wo->mh = 161.923378891
+mh->mz = 174.486533636  mz->mh = 164.29181132
+wo->mz = 166.681985704  mz->wo = 135.15839884
+
+river£ºsaar
+fr->hw = 323.342207088  hw->fr = 894.32215937
+sa->hw = 242.715568065  hw->sa = 546.031524645
+fr->sa = 796.085681716  sa->fr = 900.986985389
+
+temperature and ozone: cause is temperature, effect is ozone
+
+Pair49:
+cause -> effect:100.841393012
+effect -> cause:93.6188460553
+0.00669571131814
+
+Pair50:
+cause -> effect:79.6280395584
+effect -> cause:83.9903687343
+0.0486192289486
+(wrong)
+Pair51:
+cause -> effect:99.9100472267
+effect -> cause:98.0750260132
+0.280287398112
+(wrong)
+
+Outdoor Temperature and Indoor Temperature: Outdoor Temperature is cause, Indoor Temperature is effect
+cause->effect:41.81
+effect->cause:28.36
+p:8.9360699e-5
+
+Mechatronic Engineering Data: without noise
+input-> output1:2339.58998578
+output1-> input:1635.47755082
+1.0990988622e-212
+input -> output2:2138.76843778
+output2 -> input:1588.26185469
+1.90987822624e-166
+
+Mechatronic Engineering Data: with noise
+input-> output1:1499.08051391
+output1-> input:1500.49103558
+0.376175637521(wrong)
+input -> output2:1488.00935113
+output2 -> input:1495.4926295
+0.00558867359597(wrong)
