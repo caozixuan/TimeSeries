@@ -16,6 +16,43 @@ def exp(x):
     return 2 ** x
 
 
+class Pro(object):
+    def __init__(self, direction1=0, direction2=0):
+        self.p1 = 0
+        self.p2 = 0
+        self.flag1 = False
+        self.flag2 = False
+        self.direction1 = direction1
+        self.direction2 = direction2
+
+
+
+import operator
+def bh_procedure2(pros, alpha,direction=0):
+    cmpfun = operator.attrgetter('p1')
+    pros.sort(key=cmpfun)  #
+    for k in range(len(pros), 0, -1):
+        if pros[k - 1].p1 <= float(k) / float((len(pros))) * alpha:
+            for i in range(0,k):
+                pros[i].flag1 = True
+            break
+        else:
+            continue
+    cmpfun = operator.attrgetter('p2')
+    pros.sort(key=cmpfun)  #
+    for k in range(len(pros), 0, -1):
+        if pros[k - 1].p2 <= float(k) / float((len(pros))) * alpha:
+            for i in range(0, k):
+                pros[i].flag2 = True
+            break
+        else:
+            continue
+    counter = 0
+    for i in range(0,len(pros)):
+        if pros[i].flag1 and pros[i].flag2 and pros[i].direction1==direction and pros[i].direction2==direction:
+            counter+=1
+    return counter
+
 def bh_procedure(p_array, alpha):
     p_array.sort()
     for k in range(len(p_array), 0, -1):
@@ -64,7 +101,11 @@ def get_all_weights(length, lower_coe, coe):
 def zero_change(a):
     result = []
     for i in range(1, len(a)):
-        result.append(a[i] - a[i - 1])
+        try:
+            result.append(a[i] - a[i - 1])
+        except TypeError:
+            print a[365]
+            print "xxxxxxxxxx"
     return result
 
 
@@ -183,6 +224,32 @@ def snml_b(data, next_value):
     return lg_denom - lg_numer
 
 
+def fast_snml_b(data_sum,length,  next_value):
+    p = 0
+    log_f_0 = 0
+    log_f_1 = 0
+    log_f_2 = 0
+    double_length = 2 * length
+    try:
+        log_f_0 = data_sum * lg(data_sum) + (double_length - data_sum + 2) * lg(double_length - data_sum + 2)
+        log_f_1 = lg(2) + (data_sum + 1) * lg(data_sum + 1) + (double_length - data_sum + 1) * lg(
+            double_length - data_sum + 1)
+        log_f_2 = (data_sum + 2) * lg(data_sum + 2) + (double_length - data_sum) * lg(double_length - data_sum)
+        max_value = max([log_f_0, log_f_1, log_f_2])
+        lg_denom = max_value + math.log(
+            math.pow(2, log_f_0 - max_value) + math.pow(2, log_f_1 - max_value) + math.pow(2, log_f_2 - max_value))
+    except ValueError:
+        print data_sum
+        print double_length
+    if next_value == 0:
+        lg_numer = log_f_0
+    elif next_value == 1:
+        lg_numer = log_f_1
+    elif next_value == 2:
+        lg_numer = log_f_2
+    return lg_denom - lg_numer
+
+
 def snml_b2(mean, length, next_value):
     log_f_0 = 0
     log_f_1 = 0
@@ -209,6 +276,21 @@ def snml_b2(mean, length, next_value):
     return lg_denom - lg_numer
 
 
+def fast_mix_array(inblance_max,inblance_min,max_value,min_value,is_0_1_happen, window_length, next_value):
+    if next_value==2:
+        return max_value
+    if next_value==0:
+        return min_value
+    if inblance_min>0:
+        return min_value
+    elif inblance_max<0:
+        return max_value
+    if is_0_1_happen or inblance_max%2==0:
+        return window_length
+    return window_length-1
+
+
+
 def mix_array(effect_type, cause_type, next_type):
     counter_0_0 = 0
     counter_0_1 = 0
@@ -217,6 +299,7 @@ def mix_array(effect_type, cause_type, next_type):
     counter_2_1 = 0
     counter_2_2 = 0
     is_0_2_happen = False
+    is_0_1_happen = False
     target_array = []
     for i in range(0, len(effect_type)):
         cur_effect_type = effect_type[i]
@@ -235,6 +318,7 @@ def mix_array(effect_type, cause_type, next_type):
             if (cur_cause_type == 0 and cur_effect_type == 1) or (cur_cause_type == 1 and cur_effect_type == 0):
                 counter_0_0 += 1
                 counter_2_1 += 1
+                is_0_1_happen = True
             elif (cur_cause_type == 0 and cur_effect_type == 2) or (cur_cause_type == 2 and cur_effect_type == 0):
                 is_0_2_happen = True
                 counter_0_0 += 1
@@ -242,6 +326,7 @@ def mix_array(effect_type, cause_type, next_type):
             elif (cur_cause_type == 1 and cur_effect_type == 2) or (cur_cause_type == 2 and cur_effect_type == 1):
                 counter_2_2 += 1
                 counter_0_1 += 1
+                is_0_1_happen = True
     if next_type == 0:
         for i in range(0, counter_0_0):
             target_array.append(0)
@@ -275,7 +360,7 @@ def mix_array(effect_type, cause_type, next_type):
                 for i in range(0, counter_2_2):
                     target_array.append(2)
         else:
-            if not is_0_2_happen:
+            if is_0_1_happen:#not is_0_2_happen:
                 return [0, 0, 0, 1, 1, 1, 2, 2, 2]
             else:
                 if abs(x0) % 2 == 0:

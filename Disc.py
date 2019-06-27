@@ -30,6 +30,72 @@ def calculate_difference(cause, effect, length):
     return effect_length - cause_effect_length
 
 
+from Util import fast_mix_array, fast_snml_b
+
+
+def fast_calculate_difference(cause, effect, length):
+    cause_type = get_type_array_with_quantile(cause)
+    effect_type = get_type_array_with_quantile(effect)
+    effect_p_length_array = []
+    cause_effect_p_length__array = []
+    max_2 = 0
+    max_0 = 0
+    min_2 = 0
+    min_0 = 0
+    happen_1_count = 0
+    max_value = 0
+    min_value = 0
+    for i in range(0,len(effect)-1):
+        if i >= length:
+            effect_p_length_array.append(snml_b(effect_type[i - length:i], effect_type[i]))
+            target_sum = fast_mix_array(max_2-max_0,min_2-min_0,max_value,min_value,happen_1_count!=0,length, effect_type[i])
+            cause_effect_p_length__array.append(fast_snml_b(target_sum,length,effect_type[i]))
+            last_value_cause = cause_type[i-length]
+            last_value_effect = effect_type[i-length]
+            max_value -= max(last_value_cause, last_value_effect)
+            min_value -= min(last_value_cause, last_value_effect)
+            if (last_value_cause== 0 and last_value_effect == 1) or (last_value_cause == 1 and last_value_effect == 0) \
+                    or (last_value_cause == 1 and last_value_effect == 2) or (last_value_cause== 2 and last_value_effect== 1):
+                happen_1_count -= 1
+            if last_value_cause == last_value_effect:
+                if last_value_cause== 0:
+                    max_0 -= 1
+                    min_0 -= 1
+                elif last_value_cause== 2:
+                    max_2 -= 1
+                    min_2 -= 1
+            else:
+                value_max = max(last_value_cause, last_value_effect)
+                value_min = max(last_value_cause, last_value_effect)
+                if value_max == 2:
+                    max_2 -= 1
+                if value_min == 0:
+                    min_0 -= 1
+        max_value+=max(cause_type[i],effect_type[i])
+        min_value += min(cause_type[i], effect_type[i])
+        if (cause_type[i] == 0 and effect_type[i] == 1) or (cause_type[i] == 1 and effect_type[i] == 0) \
+                or (cause_type[i] == 1 and effect_type[i] == 2) or (cause_type[i] == 2 and effect_type[i] == 1):
+            happen_1_count += 1
+        if cause_type[i] == effect_type[i]:
+            if cause_type[i] == 0:
+                max_0 += 1
+                min_0 += 1
+            elif cause_type[i] == 2:
+                max_2 += 1
+                min_2 += 1
+        else:
+            value_max = max(cause_type[i], effect_type[i])
+            value_min = max(cause_type[i], effect_type[i])
+            if value_max == 2:
+                max_2 += 1
+            if value_min == 0:
+                min_0 += 1
+    effect_length = sum(effect_p_length_array)
+    cause_effect_length = sum(cause_effect_p_length__array)
+    return effect_length - cause_effect_length
+
+
+
 def calculate_difference_step(cause, effect, length):
     ans = []
     cause_type = get_type_array_with_quantile(cause)

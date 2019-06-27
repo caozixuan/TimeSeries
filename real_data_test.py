@@ -380,6 +380,29 @@ def ozone_test(num):
     p = math.pow(2, -(cause2effect - effect2cause))
     print p
 
+def normalize(a):
+    maxV = max(a)
+    minV = min(a)
+    for i in range(0,len(a)):
+        a[i] = (a[i]-minV)/(maxV-minV)*1.0
+
+
+def ozone_mix():
+    ozone, temp = read_ozone(1)
+    ozone2, temp2 = read_ozone(2)
+    ozone = ozone.tolist()
+    ozone2 = ozone2.tolist()
+    temp = temp.tolist()
+    temp2 = temp2.tolist()
+    normalize(ozone)
+    normalize(temp)
+    normalize(ozone2)
+    normalize(temp2)
+    ozone.extend(temp2)
+    temp.extend(ozone2)
+    return ozone,temp
+
+
 
 def ozone_test_cute(num):
     ozone, temp = read_ozone(num)

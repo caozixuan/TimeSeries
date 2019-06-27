@@ -6,8 +6,9 @@ import matplotlib.pyplot as plt
 from granger_test import granger
 from data_generation import generate_continue_data, GMM,forward_shift_continue_data
 from Util import zero_change, change_to_zero_one, get_type_array_with_quantile, get_type_array_with_quantile_change,bh_procedure,get_type_array_with_quantile_change2
-from Disc import calculate_difference, calculate_difference_with_weight_window, calculate_difference_with_quantile2,calculate_difference_with_weight,calculate_difference_with_quantile,calculate_difference_step
+from Disc import calculate_difference, calculate_difference_with_weight_window, calculate_difference_with_quantile2,calculate_difference_with_weight,calculate_difference_with_quantile,calculate_difference_step,fast_calculate_difference
 from cute import bernoulli, bernoulli2, cbernoulli, cbernoulli2
+from Util import bh_procedure2, Pro
 
 
 
@@ -41,17 +42,26 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
     p_array_improve_CUTE2 = []
     p_array1 = []
     p_array2 = []
+
+    pros1 = []
+    pros2 = []
+
+    pros_cute = []
+
+    pros_cute_counter = 0
     for i in range(0, 1000):
         if is_causal:
-            lag = 10 #random.randint(1, 3)
+            lag = random.randint(1, 3)
             cause, effect = generate_continue_data(array_length, lag, noise)
             cause_tmp = list(cause)
             effect_tmp = list(effect)
             cause = zero_change(cause)
             effect = zero_change(effect)
+            #cause = zero_change(cause)
+            #effect = zero_change(effect)
             if not is_linear:
                 for i in range(0, len(effect)):
-                    effect[i] = math.tanh(effect[i])
+                    effect[i] = math.exp(effect[i])
         else:
             lag = 5  # give a fixed lag if no causality
             if is_GMM:
@@ -64,13 +74,16 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
             effect_tmp = list(effect)
             cause = zero_change(cause)
             effect = zero_change(effect)
+
         flag1 = False
         ce_p = granger(cause, effect, lag)
-        if ce_p < 0.05:
+        ce_p_reverse = granger(effect[::-1], cause[::-1], lag)
+        if ce_p < 0.05 and ce_p_reverse<0.05:
             flag1 = True
         flag2 = False
         ce2_p = granger(effect, cause, lag)
-        if ce2_p < 0.05:
+        ce2_p_reverse = granger(cause[::-1],effect[::-1],lag)
+        if ce2_p < 0.05 and ce2_p_reverse<0.05:
             flag2 = True
         if flag1 and flag2:
             counter11 += 1
@@ -88,11 +101,13 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
             effect2 = get_type_array_with_quantile(effect)
         flag3 = False
         ce3_p = granger(cause2, effect2, lag)
-        if ce3_p < 0.05:
+        ce3_p_reverse = granger(effect2[::-1], cause2[::-1], lag)
+        if ce3_p < 0.05 and ce3_p_reverse<0.05:
             flag3 = True
         flag4 = False
         ce4_p = granger(effect2, cause2, lag)
-        if ce4_p < 0.05:
+        ce4_p_reverse = granger(cause2[::-1],effect2[::-1],lag)
+        if ce4_p < 0.05 and ce4_p_reverse<0.05:
             flag4 = True
         if flag3 and flag4:
             counter11_01 += 1
@@ -102,8 +117,13 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
             counter01_01 += 1
         elif not flag3 and not flag4:
             counter00_01 += 1
+        cause_tra = cause[::-1]
+        effect_tra = effect[::-1]
         delta_ce = calculate_difference(cause, effect, window_length)
         delta_ec = calculate_difference(effect, cause, window_length)
+
+        delta_ce2 = calculate_difference(effect_tra, cause_tra, window_length)
+        delta_ec2 = calculate_difference(cause_tra, effect_tra, window_length)
         # print 'cause' + ' -> ' + 'effect' + ':' + str(delta_ce)
         # print 'effect' + ' -> ' + 'cause' + ':' + str(delta_ec)
         if delta_ce > delta_ec and delta_ce - delta_ec >= -math.log(0.05, 2):
@@ -112,13 +132,54 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
             counter_false += 1
         else:
             counter_undecided += 1
-        p = math.pow(2, -(delta_ce - delta_ec))
+        p = math.pow(2, -abs(delta_ce - delta_ec))
+        p_tra = math.pow(2, -abs(delta_ce2 - delta_ec2))
         p_array1.append(p)
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        if delta_ce-delta_ec>0:
+            element.direction1 = 0
+        else:
+            element.direction1 = 1
+        if delta_ce2-delta_ec2>0:
+            element.direction2 = 0
+        else:
+            element.direction2 = 1
+        pros1.append(element)
+
+        p = math.pow(2, -(delta_ec - delta_ce))
+        p_tra = math.pow(2, -(delta_ec2 - delta_ce2))
+        p_array1.append(p)
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        pros2.append(element)
+
         p_array2.append(math.pow(2, -(delta_ec - delta_ce)))
         cause = change_to_zero_one(cause_tmp)
         effect = change_to_zero_one(effect_tmp)
         cause2effect = bernoulli2(effect, window_length) - cbernoulli2(effect, cause, window_length)
         effect2cause = bernoulli2(cause, window_length) - cbernoulli2(cause, effect, window_length)
+        cause2effect_reverse = bernoulli2(cause[::-1], window_length) - cbernoulli2(cause[::-1], effect[::-1], window_length)
+        effect2cause_reverse = bernoulli2(effect[::-1], window_length) - cbernoulli2(effect[::-1], cause[::-1], window_length)
+        p = math.pow(2, -abs(cause2effect - effect2cause))
+        p_tra = math.pow(2, -abs(cause2effect_reverse - effect2cause_reverse))
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        if cause2effect - effect2cause > 0:
+            element.direction1 = 0
+        else:
+            element.direction1 = 1
+        if cause2effect_reverse - effect2cause_reverse > 0:
+            element.direction2 = 0
+        else:
+            element.direction2 = 1
+        #if element.direction1==element.direction2:
+        #    if p<=0.05 and p_tra<=0.05:
+        #        pros_cute_counter+=1
+        pros_cute.append(element)
         p = math.pow(2, -(cause2effect - effect2cause))
         p_array_improve_CUTE1.append(p)
         p_array_improve_CUTE2.append(math.pow(2, -(effect2cause - cause2effect)))
@@ -126,6 +187,7 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
         effect2cause = bernoulli(cause) - cbernoulli(cause, effect)
         p_array_CUTE1.append(math.pow(2, -(cause2effect - effect2cause)))
         p_array_CUTE2.append(math.pow(2, -(effect2cause - cause2effect)))
+    """
     print "Continuous data, Granger causality test:"
     print "Two-way causality:" + str(counter11)
     print "Correct causality:" + str(counter10)
@@ -143,33 +205,61 @@ def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test
     print "Wrong cause and effect:" + str(counter_false)
     print "Undecided:" + str(counter_undecided)
     print "-----------------"
+    """
+
     if is_causal:
         ourmodel = bh_procedure(p_array1, 0.05)
-        cute = bh_procedure(p_array_CUTE1, 0.05)
+        #cute = bh_procedure(p_array_CUTE1, 0.05)
+        cute = bh_procedure2(pros_cute,0.05)/1000.0
         improve_cute = bh_procedure(p_array_improve_CUTE1, 0.05)
-        print "Origin CUTE Accuracy:" + str(cute)
-        print "Improved CUTE Accuracy:" + str(improve_cute)
-        print "Our model Accuracy:" + str(ourmodel)
+        #print "Origin CUTE Accuracy:" + str(cute)
+        #print "Improved CUTE Accuracy:" + str(improve_cute)
+        #print "Our model Accuracy:" + str(ourmodel)
+        new_model = bh_procedure2(pros1,0.05)/1000.0
     else:
-        ourmodel = (bh_procedure(p_array1, 0.05) + bh_procedure(p_array2, 0.05)) / 1000.0
-        cute = (bh_procedure(p_array_CUTE1, 0.05) + bh_procedure(p_array_CUTE2, 0.05)) / 1000.0
+        #ourmodel = (bh_procedure(p_array1, 0.05) + bh_procedure(p_array2, 0.05)) / 1000.0
+        #cute = (bh_procedure(p_array_CUTE1, 0.05) + bh_procedure(p_array_CUTE2, 0.05)) / 1000.0
+        cute = 1-bh_procedure2(pros_cute, 0.05)/1000.0
         improve_cute = (bh_procedure(p_array_improve_CUTE1, 0.05) + bh_procedure(p_array_improve_CUTE2, 0.05)) / 1000.0
-        print "Origin CUTE Accuracy:" + str(1 - cute)
-        print "Improved CUTE Accuracy:" + str(1 - improve_cute)
-        print "Our model Accuracy:" + str(1 - ourmodel)
-    return cute, improve_cute, ourmodel
-
+        #print "Origin CUTE Accuracy:" + str(1 - cute)
+        #print "Improved CUTE Accuracy:" + str(1 - improve_cute)
+        #print "Our model Accuracy:" + str(1 - ourmodel)
+        new_model = 1-(bh_procedure2(pros1, 0.05)) / 1000.0
+    dict = {}
+    dict['granger'] = [counter10,counter00]
+    dict['grangerD'] = [counter10_01,counter00_01]
+    dict['disc2'] = [cute]
+    dict['disc'] = [new_model]
+    print(pros_cute_counter)
+    print('****************')
+    return dict
 
 def test_linear_data():
     noises = [0.0, 0.1, 0.2, 0.3]
     for noise in noises:
-        test_data(6, 150, 1, 1, 0, 0, noise)
+        dict = test_data(6, 600, 1, 1, 0, 0, noise)
+        print dict['granger'][0]
+        print dict['disc2'][0]
+        print dict['disc'][0]
+
+
     for noise in noises:
-        test_data(7, 250, 1, 1, 0, 0, noise)
+        dict = test_data(6, 300, 1, 1, 0, 0, noise)
+        print dict['granger'][0]
+        print dict['disc2'][0]
+        print dict['disc'][0]
     for noise in noises:
-        test_data(8, 350, 1, 1, 0, 0, noise)
+        dict = test_data(6, 400, 1, 1, 0, 0, noise)
+        print dict['granger'][0]
+        print dict['disc2'][0]
+        print dict['disc'][0]
     for noise in noises:
-        test_data(9, 450, 1, 1, 0, 0, noise)
+        dict = test_data(6, 500, 1, 1, 0, 0, noise)
+        print dict['granger'][0]
+        print dict['disc2'][0]
+        print dict['disc'][0]
+
+
 
 
 def test_window_length_effect():
@@ -185,46 +275,154 @@ def test_window_length_effect():
 def test_non_linear():
     noises = [0.0, 0.1, 0.2, 0.3]
     for noise in noises:
-        test_data(6, 150, 1, 0, 0, 0, noise)
+        cute, improve_cute, ourmodel, counter10, counter00, counter10_01, counter00_01 = test_data(6, 600, 1, 0, 0, 0, noise)
+        print "_____________200 "+str(noise)
+        print counter10
+        print improve_cute
+        print ourmodel
+        print "_____________"
+    """
+        for noise in noises:
+        cute, improve_cute, ourmodel, counter10, counter00 = test_data(7, 300, 1, 0, 0, 0, noise)
+        print "_____________300 " + str(noise)
+        print counter10
+        print improve_cute
+        print ourmodel
+        print "_____________"
     for noise in noises:
-        test_data(7, 250, 1, 0, 0, 0, noise)
+        cute, improve_cute, ourmodel, counter10, counter00 = test_data(8, 400, 1, 0, 0, 0, noise)
+        print "_____________400 " + str(noise)
+        print counter10
+        print improve_cute
+        print ourmodel
+        print "_____________"
     for noise in noises:
-        test_data(8, 350, 1, 0, 0, 0, noise)
-    for noise in noises:
-        test_data(9, 450, 1, 0, 0, 0, noise)
+        cute, improve_cute, ourmodel, counter10, counter00 = test_data(9, 500, 1, 0, 0, 0, noise)
+        print "_____________500 " + str(noise)
+        print counter10
+        print improve_cute
+        print ourmodel
+        print "_____________"
+    """
+
 
 
 def test_no_causality_consistency():
-    test_data(6, 150, 0, 0, 0, 0, 0)
-    test_data(7, 250, 0, 0, 0, 0, 0)
-    test_data(8, 350, 0, 0, 0, 0, 0)
-    test_data(9, 450, 0, 0, 0, 0, 0)
 
-    #test_data(6, 150, 0, 0, 0, 1, 0)
-    #test_data(7, 250, 0, 0, 0, 1, 0)
-    #test_data(8, 350, 0, 0, 0, 1, 0)
-    #test_data(9, 450, 0, 0, 0, 1, 0)
+    dict = test_data(6, 200, 0, 1, 0, 0, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(7, 300, 0,1, 0, 0, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(8, 400, 0, 1, 0, 0, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(9, 500, 0, 1, 0, 0, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(10, 600, 0, 1, 0, 0, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+
+    dict =test_data(6, 200, 0, 1, 0, 1, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(7, 300, 0, 1, 0, 1, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(8, 400, 0, 1, 0, 1, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(9, 500, 0, 1, 0, 1, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict =test_data(10, 600, 0, 1, 0, 1, 0)
+    print dict['granger'][1]
+    print dict['grangerD'][1]
+    print dict['disc2'][0]
+    print dict['disc'][0]
 
 
 def test_causality_consistency():
-    test_data(6, 150, 1, 1, 0, 0, 0)
-    test_data(7, 250, 1, 1, 0, 0, 0)
-    test_data(8, 350, 1, 1, 0, 0, 0)
-    test_data(9, 450, 1, 1, 0, 0, 0)
+    dict= test_data(6, 200, 1, 1, 0, 0, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict= test_data(7, 300, 1, 1, 0, 0, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(8, 400, 1, 1, 0, 0, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(9, 500, 1, 1, 0, 0, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(10, 600, 1, 1, 0, 0, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
 
-    test_data(6, 150, 1, 1, 0, 1, 0)
-    test_data(7, 250, 1, 1, 0, 1, 0)
-    test_data(8, 350, 1, 1, 0, 1, 0)
-    test_data(9, 450, 1, 1, 0, 1, 0)
+    dict = test_data(6, 200, 1, 1, 0, 1, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(7, 300, 1, 1, 0, 1, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(8, 400, 1, 1, 0, 1, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
+    dict = test_data(9, 500, 1, 1, 0, 1, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
 
+    dict = test_data(10, 600, 1, 1, 0, 1, 0)
+    print dict['granger'][0]
+    print dict['grangerD'][0]
+    print dict['disc2'][0]
+    print dict['disc'][0]
 
 def time_test_window(array_length, window_size):
     for i in range(0, 10):
         cause, effect = generate_continue_data(array_length, 3, 0)
         cause = zero_change(cause)
         effect = zero_change(effect)
-        cause2effect = calculate_difference(cause, effect, window_size)
-        effect2cause = calculate_difference(effect, cause, window_size)
+        cause2effect = fast_calculate_difference(cause, effect, window_size)
+        effect2cause = fast_calculate_difference(effect, cause, window_size)
 
 
 def time_test_weighted_window(array_length, window_size):
@@ -241,19 +439,21 @@ def time_test_weighted(array_length, window_size):
         cause, effect = generate_continue_data(array_length, 3, 0)
         cause = zero_change(cause)
         effect = zero_change(effect)
-        cause2effect = calculate_difference_with_weight(cause, effect, window_size)
-        effect2cause = calculate_difference_with_weight(effect, cause, window_size)
+        cause2effect = calculate_difference_with_weight_window(cause, effect, 0.5,window_size)
+        effect2cause = calculate_difference_with_weight_window(effect, cause, 0.5,window_size)
 
 
 def time_window():
     times = []
     xs = []
-    for i in range(100, 5000, 100):
+    for i in range(100, 5100, 100):
         xs.append(i / 100)
         start = time.clock()
-        time_test_window(i, 6)
+        time_test_window(i, 12)
         end = time.clock()
         times.append((end - start) / 10)
+    print xs
+    print times
     plt.plot(xs, times)
     plt.xlabel("Length($\\times10^2$)")
     plt.ylabel("Time Per Series(/s)")
@@ -278,12 +478,14 @@ def time_weighted():
 def time_weighted_window():
     times = []
     xs = []
-    for i in range(100, 5000, 100):
+    for i in range(100, 5100, 100):
         xs.append(i / 100)
         start = time.clock()
-        time_test_weighted(i, 6)
+        time_test_weighted(i, 12)
         end = time.clock()
         times.append((end - start) / 10)
+    print xs
+    print times
     plt.plot(xs, times)
     plt.xlabel("Length($\\times10^2$)")
     plt.ylabel("Time Per Series(/s)")
@@ -298,8 +500,8 @@ def test_window(length,shift):
         cause, effect = generate_continue_data(length,shift,0.0)
         cause = zero_change(cause)
         effect = zero_change(effect)
-        cause = zero_change(cause)
-        effect = zero_change(effect)
+        #cause = zero_change(cause)
+        #effect = zero_change(effect)
         #cause2 = get_type_array_with_quantile(cause)
         #effect2 = get_type_array_with_quantile(effect)
         causes.append(cause)
@@ -502,15 +704,16 @@ def test_change_window_granger():
     print counter01
     print counter00
 
+
 def test_coding(length,window_length):
     causes = []
     effects = []
     results = []
     for i in range(0,1000):
-        #cause, effect2 = generate_continue_data(length,random.randint(1,3),0.0)
-        #effect, effect3 = generate_continue_data(length, random.randint(1, 3), 0.0)
-        cause = np.random.standard_normal(length)
-        effect = np.random.standard_normal(length)
+        cause, effect = generate_continue_data(length,random.randint(1,3),0.0)
+        effect, effect3 = generate_continue_data(length, random.randint(1, 3), 0.0)
+        #cause = np.random.standard_normal(length)
+        #effect = np.random.standard_normal(length)
         cause = zero_change(cause)
         effect = zero_change(effect)
         cause = zero_change(cause)
@@ -532,7 +735,7 @@ def test_coding(length,window_length):
             p_array2.append(p2)
         #ourmodel = bh_procedure(p_array, 0.05)
         ourmodel = (bh_procedure(p_array, 0.05) + bh_procedure(p_array2, 0.05)) / 1000.0
-        results.append(ourmodel)
+        results.append(1-ourmodel)
     print results
 
 
@@ -541,7 +744,7 @@ def test_coding2(length,window_length):
     effects = []
     results = []
     for i in range(0,1000):
-        cause, effect2 = generate_continue_data(length,random.randint(1,3),0.1)
+        cause, effect = generate_continue_data(length,random.randint(1,3),0.1)
         effect, effect3 = generate_continue_data(length, random.randint(1, 3), 0.1)
         cause = zero_change(cause)
         effect = zero_change(effect)
@@ -604,8 +807,7 @@ def smooth(values,window):
 
 
 def detect_segment(values,min_length):
-    delta = -math.log(0.05
-                      ,2)
+    delta = -math.log(0.05,2)
     pos_cau_start = []
     pos_cau_end = []
     neg_cau_start = []
@@ -660,16 +862,61 @@ def detect_segment(values,min_length):
     return pos_cau_start,pos_cau_end,neg_cau_start,neg_cau_end
 
 
+def detect_segment2(values,min_length):
+    delta = -math.log(0.05,2)
+    pos_cau_start = []
+    pos_cau_end = []
+    neg_cau_start = []
+    neg_cau_end = []
+    i = 1
+    difference = 0
+    start = 0
+    end = 1
+    state = up_down(values,0.9,0,20)
+    curLen = 0
+    for i in range(1,len(values)):
+        tmp_state = up_down(values,0.9,i,20)
+        if tmp_state==state:
+            curLen+=1
+        else:
+            if curLen>=min_length:
+                if state==1 and abs(values[i-curLen]-values[i])>delta:
+                    pos_cau_start.append(i-curLen)
+                    pos_cau_end.append(i)
+                elif state == -1 and abs(values[i-curLen]-values[i])>delta:
+                    neg_cau_start.append(i-curLen)
+                    neg_cau_end.append(i)
+            state = tmp_state
+            curLen = 0
+
+    if curLen >= min_length:
+        if state == 1 and abs(values[i - curLen] - values[i]) > delta:
+            pos_cau_start.append(i - curLen)
+            pos_cau_end.append(i)
+        elif state == -1 and abs(values[i - curLen] - values[i]) > delta:
+            neg_cau_start.append(i - curLen)
+            neg_cau_end.append(i)
+        curLen = 0
+    #print pos_cau_start
+    #print pos_cau_end
+    #print neg_cau_start
+    #print neg_cau_end
+    return pos_cau_start,pos_cau_end,neg_cau_start,neg_cau_end
+
+
 # Definition for an interval.
 class Interval:
      def __init__(self, s=0, e=0):
          self.start = s
          self.end = e
 
-
+import operator
 def intervalIntersection(A,B):
     m = len(A)
     n = len(B)
+    cmpfun = operator.attrgetter('start','end')
+    A.sort(key=cmpfun)
+    B.sort(key=cmpfun)
     res = []
     i = 0
     j = 0
@@ -685,6 +932,49 @@ def intervalIntersection(A,B):
             res.append(Interval(left, right))
     return res
 
+
+def get_trend(a):
+    result = []
+    for i in range(0,len(a)):
+        if i==len(a)-1:
+            result.append(1)
+        else:
+            if a[i]>a[i+1]:
+                result.append(0)
+            else:
+                result.append(1)
+    return result
+
+
+def up_down(a, th, index, window):
+    x = get_trend(a)
+    counter = 0
+    length = 0
+    if index+window>=len(x):
+        length = len(x)-index
+        for i in range(0,length):
+            if x[index+i]==1:
+                counter+=1
+    else:
+        length = window
+        for i in range(0,length):
+            if x[index+i]==1:
+                counter+=1
+    value = float(counter)/length
+    if value>th:
+        return 1
+    elif value<1-th:
+        return -1
+    return 0
+
+
+
+
+
+
+
+
+from real_data_test import ozone_mix
 def test_segment_causality():
     c = [0,1,0,1,0,1]
     causes = []
@@ -698,49 +988,56 @@ def test_segment_causality():
     values = []
     for i in c:
         if i==0:
-            cause, xx = generate_continue_data(1000, random.randint(1, 3), 0.1)
+            effect, cause = generate_continue_data(1000, random.randint(1, 3), 0.1)
             effect, xx = generate_continue_data(1000, random.randint(1, 3), 0.1)
             tmp_causes.extend(cause)
             tmp_effects.extend(effect)
             cause = zero_change(cause)
             effect = zero_change(effect)
+            #cause = zero_change(cause)
+            #effect = zero_change(effect)
             causes.extend(cause)
             effects.extend(effect)
         else:
-            cause, effect = generate_continue_data(1000, random.randint(1, 3), 0.1)
+            cause, effect = generate_continue_data(1000, random.randint(1, 3), 0.0)
             tmp_causes.extend(cause)
             tmp_effects.extend(effect)
             cause = zero_change(cause)
             effect = zero_change(effect)
             causes.extend(cause)
             effects.extend(effect)
+    #causes, effects = ozone_mix()
+    #tmp_causes = causes
+    #tmp_effects = effects
+    #causes = zero_change(causes)
+    #effects = zero_change(effects)
     causes2= causes[::-1]
     effects2 = effects[::-1]
     for l in range(0,7):
         values.append(0)
-    print tmp_causes
-    print tmp_effects
-    f = open('tmp_causes2', 'w')
-    for x in tmp_causes:
-        print >> f,x
-        print x
-    f.close()
-    f = open('tmp_effects2', 'w')
-    for x in tmp_effects:
-        print >> f, x
+    #print tmp_causes
+    #print tmp_effects
+    #f = open('tmp_causes2', 'w')
+    #for x in tmp_causes:
+    #    print >> f,x
         #print x
-    f.close()
+    #f.close()
+    #f = open('tmp_effects2', 'w')
+    #for x in tmp_effects:
+    #    print >> f, x
+        #print x
+    #f.close()
     delta_ces = calculate_difference_step(causes, effects, 6)
     delta_ecs = calculate_difference_step(effects, causes, 6)
     for i in range(0,len(delta_ces)):
         values.append(delta_ces[i]-delta_ecs[i])
-    values = smooth(values,50)
-    f = open('values2', 'w')
-    for x in values:
-        print >> f, x
+    values = smooth(values,100)
+    #f = open('values2', 'w')
+    #for x in values:
+    #    print >> f, x
         #print x
-    f.close()
-    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment(values,100)
+    #f.close()
+    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment2(values,100)
     As = []
     for i in range(0, len(pos_cau_start)):
         As.append(Interval(pos_cau_start[i], pos_cau_end[i]))
@@ -750,47 +1047,45 @@ def test_segment_causality():
         for j in range(pos_cau_start[i],pos_cau_end[i]):
             tmp_x.append(j)
             tmp_y.append(0)
-        plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
+        #plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
     for i in range(0,len(neg_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(neg_cau_start[i],neg_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
+        #plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
     font1 = {'family': 'Times New Roman',
              'weight': 'normal',
              'size': 23,
              }
-    plt.plot(tmp_causes,label="cause")
-    plt.plot(tmp_effects,label="effect")
-    plt.xlabel("x",font1)
-    plt.ylabel("y",font1)
-    foo_fig = plt.gcf()  # 'get current figure'
-    foo_fig.savefig('dy.eps', format='eps')
-    plt.show()
+    #plt.plot(tmp_causes,label="cause")
+    #plt.plot(tmp_effects,label="effect")
+    #plt.xlabel("x",font1)
+    #plt.ylabel("y",font1)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy.eps', format='eps')
+    #plt.show()
     for i in range(0,len(pos_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(pos_cau_start[i],pos_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
+        #plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
     for i in range(0,len(neg_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(neg_cau_start[i],neg_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
-    plt.xlabel("x",font1)
-    plt.ylabel('$\Delta$',font1)
-    plt.plot(values)
-    foo_fig = plt.gcf()  # 'get current figure'
-    foo_fig.savefig('dy_v.eps', format='eps')
-    print len(tmp_causes)
-    print len(tmp_effects)
-    plt.show()
+        #plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
+    #plt.xlabel("x",font1)
+    #plt.ylabel('$\Delta$',font1)
+    #plt.plot(values)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy_v.eps', format='eps')
+    #plt.show()
 
     values = []
     delta_ces = calculate_difference_step(effects2, causes2, 6)
@@ -799,12 +1094,12 @@ def test_segment_causality():
         values.append(delta_ces[i] - delta_ecs[i])
     values = values[::-1]
     values = smooth(values, 50)
-    f = open('values2', 'w')
-    for x in values:
-        print >> f, x
+    #f = open('values2', 'w')
+    #for x in values:
+        #print >> f, x
         #print x
-    f.close()
-    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment(values, 100)
+    #f.close()
+    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment2(values, 100)
     Bs = []
     for i in range(0,len(neg_cau_start)):
         Bs.append(Interval(neg_cau_start[i],neg_cau_end[i]))
@@ -816,50 +1111,48 @@ def test_segment_causality():
         for j in range(pos_cau_start[i], pos_cau_end[i]):
             tmp_x.append(j)
             tmp_y.append(0)
-        plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
+        #plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
     for i in range(0, len(neg_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(neg_cau_start[i], neg_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
+        #plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
     font1 = {'family': 'Times New Roman',
              'weight': 'normal',
              'size': 23,
              }
-    plt.plot(tmp_causes, label="cause")
-    plt.plot(tmp_effects, label="effect")
-    plt.xlabel("x", font1)
-    plt.ylabel("y", font1)
-    foo_fig = plt.gcf()  # 'get current figure'
-    foo_fig.savefig('dy.eps', format='eps')
-    plt.show()
+    #plt.plot(tmp_causes, label="cause")
+    #plt.plot(tmp_effects, label="effect")
+    #plt.xlabel("x", font1)
+    #plt.ylabel("y", font1)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy.eps', format='eps')
+    #plt.show()
     for i in range(0, len(pos_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(pos_cau_start[i], pos_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
+        #plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
     for i in range(0, len(neg_cau_start)):
         tmp_x = []
         tmp_y = []
         for i in range(neg_cau_start[i], neg_cau_end[i]):
             tmp_x.append(i)
             tmp_y.append(0)
-        plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
-    plt.xlabel("x", font1)
-    plt.ylabel('$\Delta$', font1)
-    plt.plot(values)
-    foo_fig = plt.gcf()  # 'get current figure'
-    foo_fig.savefig('dy_v.eps', format='eps')
-    print len(tmp_causes)
-    print len(tmp_effects)
-    plt.show()
+        #plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
+    #plt.xlabel("x", font1)
+    #plt.ylabel('$\Delta$', font1)
+    #plt.plot(values)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy_v.eps', format='eps')
+    #plt.show()
     res = intervalIntersection(As,Bs)
-    for i in res:
-        print str(i.start) + " " + str(i.end)
+    #for i in res:
+        #print str(i.start) + " " + str(i.end)
     s1 = Interval(1000,2000)
     s2 = Interval(3000, 4000)
     s3 = Interval(5000, 6000)
@@ -873,16 +1166,243 @@ def test_segment_causality():
     res2 = intervalIntersection(cau_seg,res)
     for i in res2:
         total_recall_points= total_recall_points+i.end-i.start
-    print total_recall_points/3000.0
+    recall = total_recall_points/3000.0
     total_wrong_points = 0
     res3 = intervalIntersection(no_cau_seg,res)
     for i in res3:
         print str(i.start) + " " + str(i.end)
     for i in res3:
         total_wrong_points= total_wrong_points+i.end-i.start
-    print 1-total_wrong_points/3000.0
+    pre =  1-total_wrong_points/3000.0
+    return recall,pre
 
 
+def test_segment_causality2(noise):
+    choices = [0,-1,1]
+    pos_segment = []
+    neg_segment = []
+    no_segment = []
+    causes = []
+    effects2 = []
+    tmp_causes = []
+    tmp_effects2 = []
+    effects = []
+    causes2 = []
+    tmp_effects = []
+    tmp_causes2 = []
+    values = []
+    cau_seg_counter = 0
+    for j in range(0,6):
+        i = random.sample(choices,1)[0]
+        if i==1:
+            cau_seg_counter+=1
+            pos_segment.append([j*1000,(j+1)*1000])
+            cause, effect = generate_continue_data(1000, random.randint(1, 3), noise)
+            tmp_causes.extend(cause)
+            tmp_effects.extend(effect)
+            cause = zero_change(cause)
+            effect = zero_change(effect)
+            #cause = zero_change(cause)
+            #effect = zero_change(effect)
+            causes.extend(cause)
+            effects.extend(effect)
+        elif i==-1:
+            cau_seg_counter+=1
+            neg_segment.append([j * 1000, (j + 1) * 1000])
+            effect, cause = generate_continue_data(1000, random.randint(1, 3), noise)
+            tmp_causes.extend(cause)
+            tmp_effects.extend(effect)
+            cause = zero_change(cause)
+            effect = zero_change(effect)
+            causes.extend(cause)
+            effects.extend(effect)
+        else:
+            no_segment.append([j * 1000, (j + 1) * 1000])
+            cause, xx = generate_continue_data(1000, random.randint(1, 3), 0.1)
+            effect, xx = generate_continue_data(1000, random.randint(1, 3), 0.1)
+            tmp_causes.extend(cause)
+            tmp_effects.extend(effect)
+            cause = zero_change(cause)
+            effect = zero_change(effect)
+            causes.extend(cause)
+            effects.extend(effect)
+    #causes, effects = ozone_mix()
+    #tmp_causes = causes
+    #tmp_effects = effects
+    #causes = zero_change(causes)
+    #effects = zero_change(effects)
+    causes2= causes[::-1]
+    effects2 = effects[::-1]
+    for l in range(0,7):
+        values.append(0)
+    #print tmp_causes
+    #print tmp_effects
+    #f = open('tmp_causes2', 'w')
+    #for x in tmp_causes:
+    #    print >> f,x
+        #print x
+    #f.close()
+    #f = open('tmp_effects2', 'w')
+    #for x in tmp_effects:
+    #    print >> f, x
+        #print x
+    #f.close()
+    delta_ces = calculate_difference_step(causes, effects, 6)
+    delta_ecs = calculate_difference_step(effects, causes, 6)
+    for i in range(0,len(delta_ces)):
+        values.append(delta_ces[i]-delta_ecs[i])
+    values = smooth(values,100)
+    #f = open('values2', 'w')
+    #for x in values:
+    #    print >> f, x
+        #print x
+    #f.close()
+    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment2(values,100)
+    As = []
+    As2 = []
+    for i in range(0, len(pos_cau_start)):
+        As.append(Interval(pos_cau_start[i], pos_cau_end[i]))
+    for i in range(0,len(neg_cau_start)):
+        As2.append(Interval(neg_cau_start[i],neg_cau_end[i]))
+    for i in range(0,len(pos_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for j in range(pos_cau_start[i],pos_cau_end[i]):
+            tmp_x.append(j)
+            tmp_y.append(0)
+        #plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
+    for i in range(0,len(neg_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(neg_cau_start[i],neg_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
+    font1 = {'family': 'Times New Roman',
+             'weight': 'normal',
+             'size': 23,
+             }
+    #plt.plot(tmp_causes,label="cause")
+    #plt.plot(tmp_effects,label="effect")
+    #plt.xlabel("x",font1)
+    #plt.ylabel("y",font1)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy.eps', format='eps')
+    #plt.show()
+    for i in range(0,len(pos_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(pos_cau_start[i],pos_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x,tmp_y,c='r',linewidth=5.0)
+    for i in range(0,len(neg_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(neg_cau_start[i],neg_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x,tmp_y,c='g',linewidth=5.0)
+    #plt.xlabel("x",font1)
+    #plt.ylabel('$\Delta$',font1)
+    #plt.plot(values)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy_v.eps', format='eps')
+    #plt.show()
+
+    values = []
+    delta_ces = calculate_difference_step(effects2, causes2, 6)
+    delta_ecs = calculate_difference_step(causes2, effects2, 6)
+    for i in range(0, len(delta_ces)):
+        values.append(delta_ces[i] - delta_ecs[i])
+    #values = values[::-1]
+    values = smooth(values, 100)
+    #f = open('values2', 'w')
+    #for x in values:
+        #print >> f, x
+        #print x
+    #f.close()
+    pos_cau_start, pos_cau_end, neg_cau_start, neg_cau_end = detect_segment2(values, 100)
+    Bs = []
+    Bs2 = []
+    for i in range(0,len(pos_cau_start)):
+        Bs.append(Interval(6000-pos_cau_end[i],6000-pos_cau_start[i]))
+    for i in range(0,len(neg_cau_start)):
+        Bs2.append(Interval(6000-neg_cau_end[i],6000-neg_cau_start[i]))
+
+
+    for i in range(0, len(pos_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for j in range(pos_cau_start[i], pos_cau_end[i]):
+            tmp_x.append(j)
+            tmp_y.append(0)
+        #plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
+    for i in range(0, len(neg_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(neg_cau_start[i], neg_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
+    font1 = {'family': 'Times New Roman',
+             'weight': 'normal',
+             'size': 23,
+             }
+    #plt.plot(tmp_causes, label="cause")
+    #plt.plot(tmp_effects, label="effect")
+    #plt.xlabel("x", font1)
+    #plt.ylabel("y", font1)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy.eps', format='eps')
+    #plt.show()
+    for i in range(0, len(pos_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(pos_cau_start[i], pos_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x, tmp_y, c='r', linewidth=5.0)
+    for i in range(0, len(neg_cau_start)):
+        tmp_x = []
+        tmp_y = []
+        for i in range(neg_cau_start[i], neg_cau_end[i]):
+            tmp_x.append(i)
+            tmp_y.append(0)
+        #plt.plot(tmp_x, tmp_y, c='g', linewidth=5.0)
+    #plt.xlabel("x", font1)
+    #plt.ylabel('$\Delta$', font1)
+    #plt.plot(values)
+    #foo_fig = plt.gcf()  # 'get current figure'
+    #foo_fig.savefig('dy_v.eps', format='eps')
+    #plt.show()
+    res = intervalIntersection(As,Bs)
+    #for i in res:
+        #print str(i.start) + " " + str(i.end)
+    pos_cau_seg_detect = intervalIntersection(As, Bs)
+    neg_cau_seg_detect = intervalIntersection(As2,Bs2)
+    real_pos_segment = []
+    real_neg_segment = []
+    for element in pos_segment:
+        real_pos_segment.append(Interval(element[0],element[1]))
+    for element in neg_segment:
+        real_neg_segment.append(Interval(element[0], element[1]))
+
+    total_recall_points = 0
+    res2 = intervalIntersection(real_pos_segment,pos_cau_seg_detect)
+    res2.extend(intervalIntersection(neg_cau_seg_detect,real_neg_segment))
+    for i in res2:
+        total_recall_points= total_recall_points+i.end-i.start
+    recall = total_recall_points/float(cau_seg_counter*1000)
+    total_points_num = 0
+    for element in pos_cau_seg_detect:
+        total_points_num = total_points_num + element.end -element.start
+    for element in neg_cau_seg_detect:
+        total_points_num = total_points_num + element.end -element.start
+    pre = float(total_recall_points)/total_points_num
+    #print(recall)
+    #print(pre)
+    return recall,pre
 
 
 
@@ -894,28 +1414,59 @@ if __name__ == '__main__':
 
     #test_linear_data()
     #test_non_linear()
-    #test_coding2(150,6)
-    #test_coding2(250, 7)
-    #test_coding2(350, 8)
-    #test_coding2(450, 9)
+    #test_coding(200,6)
+    #test_coding(300, 7)
+    #test_coding(400, 8)
+    #test_coding(500, 9)
+    #test_coding(600, 10)
     #time_window()
     #time_weighted()
     #time_weighted_window()
     #results11,result10,result01,results00 = test_window_granger(240,5)
-    test_segment_causality()
+
+    recalls = []
+    pres = []
+    f1s = []
+    for noise in [0,0.1,0.2,0.3]:
+        print(noise)
+        print("---------------------------------------------")
+        for i in range(0,100):
+            recall , pre = test_segment_causality2(noise)
+            recalls.append(recall)
+            pres.append(pre)
+            f1s.append(2*pre*recall/(pre+recall))
+        print max(recalls)
+        print min(recalls)
+
+        print max(pres)
+        print min(pres)
+
+        print max(f1s)
+        print min(f1s)
+
+
+        print np.std(pres)
+        print np.std(recalls)
+        print np.std(f1s)
+
+        print np.average(pres)
+        print np.average(recalls)
+        print np.average(f1s)
+
+
     #test_window_length_effect()
 
     #test_motivation(2850)
-    for i in range(3,11):
+    for i in range(4,11,2):
         print "***********"+str(i)+"*****************"
-        test_window(150,i)
-        test_window(250, i)
-        test_window(350,i)
-        test_window(450, i)
-        test_window(550, i)
-        test_window(650, i)
-        test_window(750, i)
-        test_window(850, i)
+        test_window(200,i)
+        test_window(300, i)
+        test_window(400,i)
+        test_window(500, i)
+        test_window(600, i)
+        test_window(700, i)
+        test_window(800, i)
+        test_window(900, i)
         #test_icute_window(150,i)
         #test_icute_window(250, i)
         #test_icute_window(350, i)
@@ -976,7 +1527,7 @@ if __name__ == '__main__':
 """
     #test_change_window()
     #test_change_window_icute()
-    test_change_window_granger()
+    #test_change_window_granger()
     #test_coding(150,6)
     #test_coding(250, 7)
     #test_coding(350, 8)

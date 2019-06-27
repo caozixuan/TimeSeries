@@ -413,8 +413,240 @@ def exchange_test():
 
     plt.show()
 
+from Util import bh_procedure2, Pro
+def test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test_CUTE, noise):
+    counter11 = 0
+    counter10 = 0
+    counter01 = 0
+    counter00 = 0
+    counter11_01 = 0
+    counter10_01 = 0
+    counter01_01 = 0
+    counter00_01 = 0
+    counter_undecided = 0
+    counter_true = 0
+    counter_false = 0
+    p_array_CUTE1 = []
+    p_array_CUTE2 = []
+    p_array_improve_CUTE1 = []
+    p_array_improve_CUTE2 = []
+    p_array1 = []
+    p_array2 = []
 
+    pros1 = []
+    pros2 = []
+
+    pros_cute = []
+    for i in range(0, 1000):
+        if is_causal:
+            lag = random.randint(1, 3)
+            cause, effect = generate_continue_data(array_length, lag, noise)
+            cause_tmp = list(cause)
+            effect_tmp = list(effect)
+            cause = zero_change(cause)
+            effect = zero_change(effect)
+            #cause = zero_change(cause)
+            #effect = zero_change(effect)
+            if not is_linear:
+                for i in range(0, len(effect)):
+                    effect[i] = math.exp(effect[i])
+        else:
+            lag = 5  # give a fixed lag if no causality
+            if is_GMM:
+                cause = GMM(3, array_length)
+                effect = GMM(5, array_length)
+            else:
+                cause = np.random.standard_normal(array_length)
+                effect = np.random.standard_normal(array_length)
+            cause_tmp = list(cause)
+            effect_tmp = list(effect)
+            cause = zero_change(cause)
+            effect = zero_change(effect)
+
+        flag1 = False
+        ce_p = granger(cause, effect, lag)
+        ce_p_reverse = granger(effect[::-1], cause[::-1], lag)
+        if ce_p < 0.05 and ce_p_reverse<0.05:
+            flag1 = True
+        flag2 = False
+        ce2_p = granger(effect, cause, lag)
+        ce2_p_reverse = granger(cause[::-1],effect[::-1],lag)
+        if ce2_p < 0.05 and ce2_p_reverse<0.05:
+            flag2 = True
+        if flag1 and flag2:
+            counter11 += 1
+        elif flag1 and not flag2:
+            counter10 += 1
+        elif not flag1 and flag2:
+            counter01 += 1
+        elif not flag1 and not flag2:
+            counter00 += 1
+        if is_test_CUTE:
+            cause2 = change_to_zero_one(cause)
+            effect2 = change_to_zero_one(effect)
+        else:
+            cause2 = get_type_array_with_quantile(cause)
+            effect2 = get_type_array_with_quantile(effect)
+        flag3 = False
+        ce3_p = granger(cause2, effect2, lag)
+        ce3_p_reverse = granger(effect2[::-1], cause2[::-1], lag)
+        if ce3_p < 0.05 and ce3_p_reverse<0.05:
+            flag3 = True
+        flag4 = False
+        ce4_p = granger(effect2, cause2, lag)
+        ce4_p_reverse = granger(cause2[::-1],effect2[::-1],lag)
+        if ce4_p < 0.05 and ce4_p_reverse<0.05:
+            flag4 = True
+        if flag3 and flag4:
+            counter11_01 += 1
+        elif flag3 and not flag4:
+            counter10_01 += 1
+        elif not flag3 and flag4:
+            counter01_01 += 1
+        elif not flag3 and not flag4:
+            counter00_01 += 1
+        cause_tra = cause[::-1]
+        effect_tra = effect[::-1]
+        delta_ce = calculate_difference(cause, effect, window_length)
+        delta_ec = calculate_difference(effect, cause, window_length)
+
+        delta_ce2 = calculate_difference(effect_tra, cause_tra, window_length)
+        delta_ec2 = calculate_difference(cause_tra, effect_tra, window_length)
+        # print 'cause' + ' -> ' + 'effect' + ':' + str(delta_ce)
+        # print 'effect' + ' -> ' + 'cause' + ':' + str(delta_ec)
+        if delta_ce > delta_ec and delta_ce - delta_ec >= -math.log(0.05, 2):
+            counter_true += 1
+        elif delta_ec > delta_ce and delta_ec - delta_ce >= -math.log(0.05, 2):
+            counter_false += 1
+        else:
+            counter_undecided += 1
+        p = math.pow(2, -abs(delta_ce - delta_ec))
+        p_tra = math.pow(2, -abs(delta_ce2 - delta_ec2))
+        p_array1.append(p)
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        if delta_ce-delta_ec>0:
+            element.direction1 = 0
+        else:
+            element.direction1 = 1
+        if delta_ce2-delta_ec2>0:
+            element.direction2 = 0
+        else:
+            element.direction2 = 1
+        pros1.append(element)
+
+        p = math.pow(2, -(delta_ec - delta_ce))
+        p_tra = math.pow(2, -(delta_ec2 - delta_ce2))
+        p_array1.append(p)
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        pros2.append(element)
+
+        p_array2.append(math.pow(2, -(delta_ec - delta_ce)))
+        cause = change_to_zero_one(cause_tmp)
+        effect = change_to_zero_one(effect_tmp)
+        cause2effect = bernoulli2(effect, window_length) - cbernoulli2(effect, cause, window_length)
+        effect2cause = bernoulli2(cause, window_length) - cbernoulli2(cause, effect, window_length)
+        cause2effect_reverse = bernoulli2(cause[::-1], window_length) - cbernoulli2(cause[::-1], effect[::-1], window_length)
+        effect2cause_reverse = bernoulli2(effect[::-1], window_length) - cbernoulli2(effect[::-1], cause[::-1], window_length)
+        p = math.pow(2, -abs(cause2effect - effect2cause))
+        p_tra = math.pow(2, -abs(cause2effect_reverse - effect2cause_reverse))
+        element = Pro()
+        element.p1 = p
+        element.p2 = p_tra
+        if cause2effect - effect2cause > 0:
+            element.direction1 = 0
+        else:
+            element.direction1 = 1
+        if cause2effect_reverse - effect2cause_reverse > 0:
+            element.direction2 = 0
+        else:
+            element.direction2 = 1
+        pros_cute.append(element)
+        p = math.pow(2, -(cause2effect - effect2cause))
+        p_array_improve_CUTE1.append(p)
+        p_array_improve_CUTE2.append(math.pow(2, -(effect2cause - cause2effect)))
+        cause2effect = bernoulli(effect) - cbernoulli(effect, cause)
+        effect2cause = bernoulli(cause) - cbernoulli(cause, effect)
+        p_array_CUTE1.append(math.pow(2, -(cause2effect - effect2cause)))
+        p_array_CUTE2.append(math.pow(2, -(effect2cause - cause2effect)))
+    """
+    print "Continuous data, Granger causality test:"
+    print "Two-way causality:" + str(counter11)
+    print "Correct causality:" + str(counter10)
+    print "Wrong causality:" + str(counter01)
+    print "No causality:" + str(counter00)
+    print "-----------------"
+    print "Encoding data, Granger causality test:"
+    print "Two-way causality:" + str(counter11_01)
+    print "Correct causality:" + str(counter10_01)
+    print "Wrong causality:" + str(counter01_01)
+    print "No causality:" + str(counter00_01)
+    print "-----------------"
+    print "Encoding data, Our test:"
+    print "Correct cause and effect:" + str(counter_true)
+    print "Wrong cause and effect:" + str(counter_false)
+    print "Undecided:" + str(counter_undecided)
+    print "-----------------"
+    """
+
+    if is_causal:
+        ourmodel = bh_procedure(p_array1, 0.05)
+        #cute = bh_procedure(p_array_CUTE1, 0.05)
+        cute = bh_procedure2(pros_cute,0.05)/1000.0
+        improve_cute = bh_procedure(p_array_improve_CUTE1, 0.05)
+        #print "Origin CUTE Accuracy:" + str(cute)
+        #print "Improved CUTE Accuracy:" + str(improve_cute)
+        #print "Our model Accuracy:" + str(ourmodel)
+        new_model = bh_procedure2(pros1,0.05)/1000.0
+    else:
+        #ourmodel = (bh_procedure(p_array1, 0.05) + bh_procedure(p_array2, 0.05)) / 1000.0
+        #cute = (bh_procedure(p_array_CUTE1, 0.05) + bh_procedure(p_array_CUTE2, 0.05)) / 1000.0
+        cute = 1-bh_procedure2(pros_cute, 0.05)/1000.0
+        improve_cute = (bh_procedure(p_array_improve_CUTE1, 0.05) + bh_procedure(p_array_improve_CUTE2, 0.05)) / 1000.0
+        #print "Origin CUTE Accuracy:" + str(1 - cute)
+        #print "Improved CUTE Accuracy:" + str(1 - improve_cute)
+        #print "Our model Accuracy:" + str(1 - ourmodel)
+        new_model = 1-(bh_procedure2(pros1, 0.05)) / 1000.0
+    dict = {}
+    dict['granger'] = [counter10,counter00]
+    dict['grangerD'] = [counter10_01,counter00_01]
+    dict['disc2'] = [cute]
+    dict['disc'] = [new_model]
+    return dict
+
+
+def granger_test2():
+    counter = 0
+    counter2 = 0
+    for i in range(0,1001):
+        cause, effect = generate_continue_data(300,3,0.1)
+        ce_p = granger(cause, effect, 3)
+        ce_p2 = granger(effect, cause, 3)
+        flag1 = False
+        if ce_p<0.05 and ce_p2>0.05:
+            flag1 = True
+            counter2+=1
+        ce2_p = granger(effect[::-1], cause[::-1], 3)
+        ce2_p2 = granger(cause[::-1], effect[::-1], 3)
+        flag2 = False
+        if ce2_p<0.05 and ce2_p2>0.05:
+            flag2 = True
+        if flag1 and flag2:
+            counter+=1
+    print(counter)
+    print(counter2)
+
+
+
+if __name__ == '__main__':
+    dict = test_data(10, 600, 0, 0, 0, 0, 0.0)
+    # ef test_data(window_length, array_length, is_causal, is_linear, is_GMM, is_test_CUTE, noise):
+    #print(new_model)
+    #granger_test2()
 #real_data_test()
-test_change(5)
+#test_change(5)
 #granger_test()
 #exchange_test()
